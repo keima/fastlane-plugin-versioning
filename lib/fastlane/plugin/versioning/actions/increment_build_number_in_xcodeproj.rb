@@ -23,6 +23,8 @@ module Fastlane
           set_build_number_using_target(params, next_build_number)
         elsif params[:build_configuration_name] && params[:scheme]
           set_build_number_using_scheme(params, next_build_number)
+        elsif params[:project_wide_only]
+          set_build_number_only_on_project_wide(params, next_build_number)
         else
           set_all_xcodeproj_build_numbers(params, next_build_number)
         end
@@ -44,6 +46,14 @@ module Fastlane
         is_build_valid_configuration = configuration.isa == "XCBuildConfiguration" && !configuration.build_settings["PRODUCT_BUNDLE_IDENTIFIER"].nil?
         is_build_valid_configuration &&= configuration.name == name unless name.nil?
         return is_build_valid_configuration
+      end
+
+      def self.set_build_number_only_on_project_wide(params, next_build_number)
+        project = Xcodeproj::Project.open(params[:xcodeproj])
+        project.build_configurations.each do |config|
+          config.build_settings["CURRENT_PROJECT_VERSION"] = next_build_number
+        end
+        project.save
       end
 
       def self.set_build_number_using_target(params, next_build_number)
@@ -101,16 +111,21 @@ module Fastlane
           FastlaneCore::ConfigItem.new(key: :target,
                                          env_name: "FL_VERSION_NUMBER_TARGET",
                                          optional: true,
-                                         conflicting_options: [:scheme],
+                                         conflicting_options: [:scheme, :project_wide_only],
                                          description: "Specify a specific target if you have multiple per project, optional"),
           FastlaneCore::ConfigItem.new(key: :scheme,
                                          env_name: "FL_VERSION_NUMBER_SCHEME",
                                          optional: true,
-                                         conflicting_options: [:target],
+                                         conflicting_options: [:target, :project_wide_only],
                                          description: "Specify a specific scheme if you have multiple per project, optional"),
           FastlaneCore::ConfigItem.new(key: :build_configuration_name,
                                          optional: true,
-                                         description: "Specify a specific build configuration if you have different build settings for each configuration")
+                                         description: "Specify a specific build configuration if you have different build settings for each configuration"),
+          FastlaneCore::ConfigItem.new(key: :project_wide_only,
+                                         conflicting_options: [:scheme, :target],
+                                         is_string: false,
+                                         default_value: false,
+                                         description: "Overwrite only on project wide build configuration if targets inherited project wide value. default is false")
         ]
       end
 
